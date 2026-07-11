@@ -1,3 +1,8 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Qwen3.6-27B on 4× RTX 5060 Ti — Single-Stream Coding Benchmark (llama.cpp only)</title>
 <style>
   :root{
@@ -93,6 +98,8 @@
   .kbd{font-family:var(--mono);background:var(--surface2);border:1px solid var(--border);border-radius:4px;
     padding:1px 6px;font-size:.85em}
 </style>
+</head>
+<body>
 
 <div class="wrap">
   <p class="eyebrow">Inference benchmark · single-stream coding</p>
@@ -309,3 +316,5 @@ drawAll(); buildTables();
 new MutationObserver(drawAll).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
 matchMedia('(prefers-color-scheme:dark)').addEventListener?.('change',drawAll);
 </script>
+</body>
+</html>
