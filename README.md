@@ -50,6 +50,37 @@ graphs (eager is ~4× slower, launch-bound) and a ~4-min `torch.compile`; its MT
 acceptance but collapses throughput at long context (unchanged by `--max-num-batched-tokens`
 tuning). llama.cpp is lean at bs=1 out of the box, and MTP is one flag.
 
+## Second platform: 2× RTX 3090 (Ampere)
+
+Same harness on a pair of RTX 3090s (no NVLink; on exactly 2 GPUs llama.cpp uses its **internal**
+2-GPU all-reduce, selected via `GGML_CUDA_ALLREDUCE`), plus a 4×3090 bonus, vs the 4×5060 Ti:
+
+| config (bs=1, Q8_0) | 1k TG | 255k TG | 1k PP | 255k PP |
+|---|---|---|---|---|
+| 2×3090 nomtp · f16 KV | 44.1 | 27.4 | 1148 | 839 |
+| 2×3090 MTP · q8 KV | 69.9 | 45.2 | 982 | 744 |
+| 4×3090 nomtp · f16 KV | 35.3 | 29.3 | 435 | 436 |
+| 4×3090 MTP · f16 KV | 62.9 | 50.6 | 405 | 401 |
+| 4×5060 Ti nomtp · f16 KV | 39.4 | 26.7 | 795 | 608 |
+| 4×5060 Ti MTP · f16 KV | 69.0 | 52.2 | — | 562 |
+
+- **Memory-bound vs latency-bound (the crux).** Live `dmon` on 2×3090 decode: SM 97%, mem-controller
+  86%, PCIe ~0.1 GB/s, ~325 W — the pair hits the *right* bs=1 ceiling (VRAM bandwidth). The 5060 Ti
+  quad stalls on collective latency (~100 W, SM dipping to 4–90%).
+- **internal vs butterfly all-reduce:** internal (2-GPU only) beats the generic butterfly by +21%
+  decode / +64% prefill at 1k.
+- **q8-KV tax:** ~15% slower decode at 255k (23.4 vs 27.4). Like-for-like MTP speedup ≈ 1.93× on 3090
+  ≈ 1.96× on 5060 Ti — MTP works equally on both.
+- **More cards hurt at bs=1:** 4×3090 (butterfly) is slower than 2×3090 (internal) except a marginal
+  max-context decode gain — adding GPUs loses the internal fast path.
+- **Max-context MTP is a tie:** 4×3090 f16+MTP (50.6) ≈ 5060 Ti quad (52.2), within noise. At 4 cards
+  both fall to butterfly and go latency-bound, so the 3090's bandwidth edge (real at 2-card/low-context)
+  isn't on the critical path.
+- **Value:** 2×3090 ≈ $2,400 vs 4×5060 Ti ≈ $2,000. The cheaper quad wins VRAM (f16 KV + MTP at 255k),
+  Blackwell FP8/FP4, and power (~400 W vs ~650 W); the 3090 pair wins prefill/TTFT (~1.4×). Bandwidth is
+  a non-issue (measured ~1–3 GB/s; even PCIe 4.0 ×4 has ~3× headroom) — the real variable is collective
+  *latency* / topology (favor CPU-direct lanes).
+
 ## Hardware & software
 
 - **GPUs:** 4× NVIDIA RTX 5060 Ti (16 GB, Blackwell **sm_120**), PCIe Gen4 ×8, **no NVLink, no

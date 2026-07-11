@@ -215,6 +215,70 @@
       signals — SM dips, idle PCIe, the P2P-null A/B, and low power — pointing at one cause.</p>
   </div>
 
+  <h2>Second platform: 2× RTX 3090 (Ampere)</h2>
+  <div class="prose">
+    <p>Same harness, same model, different silicon: a pair of RTX 3090s (Ampere, no NVLink) against
+      the four 5060 Tis. The 3090 has ~2× the memory bandwidth (~936 vs ~448 GB/s) and needs only
+      <b>2 tensor-parallel hops instead of 4</b> — and on exactly two GPUs, llama.cpp uses its
+      <b>internal</b> all-reduce (a hand-rolled 2-GPU pipeline; it literally checks <span class="mono">n_devices == 2</span>
+      and falls back to a generic "butterfly" otherwise). All runs Q8_0, <span class="mono">-sm tensor</span>, bs=1.</p>
+  </div>
+
+  <div class="tblwrap"><table>
+    <thead><tr><th>config (bs=1)</th><th>1k TG</th><th>255k TG</th><th>1k PP</th><th>255k PP</th></tr></thead>
+    <tbody>
+      <tr><td>2×3090 nomtp · f16 KV</td><td class="cell-base">44.1</td><td class="cell-base">27.4</td><td>1148</td><td>839</td></tr>
+      <tr><td>2×3090 <b>MTP</b> · q8 KV</td><td class="cell-mtp">69.9</td><td class="cell-mtp">45.2</td><td>982</td><td>744</td></tr>
+      <tr><td>4×5060Ti nomtp · f16 KV</td><td>39.4</td><td>26.7</td><td>795</td><td>608</td></tr>
+      <tr><td>4×5060Ti <b>MTP</b> · f16 KV</td><td>69.0</td><td>52.2</td><td>—</td><td>562</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note">
+    <div class="h">The two platforms fail differently — and that's the whole story</div>
+    A live <span class="mono">dmon</span> trace during 2×3090 decode: <b>SM 97%, memory-controller 86%,
+    PCIe ~0.1 GB/s, ~325 W/card</b>. The 3090 pair is <b>memory-bandwidth-bound</b> — the correct,
+    unavoidable bs=1 ceiling — with SMs pinned and the bus nearly idle. The 5060 Ti quad was the opposite:
+    <b>latency-bound</b>, SMs dipping to 4–90%, ~100 W, never reaching its memory ceiling because it stalls
+    on collective sync. Fewer hops + the internal 2-GPU all-reduce let the 3090 sail past the wall that
+    caps the 4-card box.
+  </div>
+
+  <h3>Four things the 3090 runs pinned down</h3>
+  <div class="tblwrap"><table>
+    <thead><tr><th>probe (2×3090 unless noted)</th><th>result</th><th>takeaway</th></tr></thead>
+    <tbody>
+      <tr><td><b>internal</b> vs <b>butterfly</b> all-reduce (1k)</td><td>44.1 vs 36.4 TG · 1148 vs 699 PP</td><td>internal is the real fast path (+21% decode, +64% prefill)</td></tr>
+      <tr><td><b>q8 KV</b> vs f16 KV, nomtp @255k</td><td>23.4 vs 27.4 TG</td><td>q8 KV costs ~15% decode — the tax 48 GB forces at 255k+MTP</td></tr>
+      <tr><td><b>MTP speedup</b>, like-for-like (mtp-q8 ÷ nomtp-q8 @255k)</td><td>45.2 / 23.4 = <b>1.93×</b></td><td>≈ the 5060 Ti's 1.96× — MTP works equally on both</td></tr>
+      <tr><td><b>4×3090</b> (butterfly) vs 2×3090 (internal)</td><td>1k: 35.3 vs 44.1 · 255k: 29.3 vs 27.4</td><td>more cards <i>hurt</i> at bs=1 (lose internal AR); help only marginally at max-ctx decode</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note">
+    <div class="h">Max-context MTP: a tie — and why the 3090's bandwidth doesn't win here</div>
+    4×3090 f16+MTP@255k = <b>50.6</b> vs the 5060 Ti quad's <b>52.2</b> — a ~3% gap, single-rep vs a
+    2-rep median, well inside MTP's run-to-run variance. Call it <b>even</b>. The telling part is <i>why</i>
+    the 3090's ~2× bandwidth doesn't pull ahead: at 4 cards both platforms <b>lose the internal all-reduce</b>
+    (it needs exactly 2 devices) and fall to the generic <b>butterfly</b> collective, so decode goes
+    <b>latency-bound</b> — and latency is bandwidth-insensitive. The 3090's edge is real at 2-card/low-context
+    (44 vs 39, where it's memory-bound) but simply isn't on the critical path in the 4-card/long-context
+    regime. Bandwidth wins where you're bandwidth-bound; here you're not.
+  </div>
+
+  <div class="note warn">
+    <div class="h">Buyer's read: the $400-cheaper quad wins the workload — if you get the lanes right</div>
+    <p>2×3090 ≈ $2,400; 4×5060 Ti ≈ $2,000. The pair is the better <b>prefill/TTFT</b> machine (~1.4×) and
+      ties on decode — but the quad's <b>64 GB keeps f16 KV + MTP at 255k (52.2)</b> where the 3090's 48 GB
+      is forced to q8 (45.2), adds <b>Blackwell FP8/FP4</b> headroom the Ampere pair can't touch, and draws
+      ~400 W vs ~650 W. And the bandwidth worry is moot: mid-inference we measured only ~1–3 GB/s per card,
+      so even <b>PCIe 4.0 ×4 (~8 GB/s/dir)</b> has ~3× headroom — the real variable is <b>collective
+      latency</b>, i.e. topology. A consumer X870E board with two ×16 5.0 slots bifurcated to ×4 keeps all
+      four cards on <b>CPU-direct lanes</b> (lower latency than chipset-hung lanes at the same bandwidth) —
+      which is exactly the bottleneck that limited us, and it doesn't need a Threadripper to fix.</p>
+  </div>
+
+
   <h2>Takeaways</h2>
   <ul class="take">
     <li><span class="n">1</span><span><b>262k context is real on 64 GB, unquantized.</b> Q8_0 weights +
