@@ -1,0 +1,311 @@
+<title>Qwen3.6-27B on 4× RTX 5060 Ti — Single-Stream Coding Benchmark (llama.cpp only)</title>
+<style>
+  :root{
+    --bg:#fbfcfd; --ink:#16202b; --muted:#5a6b7a; --faint:#8496a4;
+    --surface:#f1f4f7; --surface2:#e9eef2; --border:#dbe3ea; --hair:#e7edf1;
+    --s-base:#1668b0; --s-mtp:#b5651d; --accent:#1668b0;
+    --good:#1f7a4d; --grid:#e3e9ee;
+    --mono:ui-monospace,"SF Mono","Cascadia Code","JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#0f1519; --ink:#e4eaf0; --muted:#93a2b0; --faint:#66757f;
+      --surface:#161f26; --surface2:#1b262e; --border:#26313b; --hair:#212c34;
+      --s-base:#3e88cc; --s-mtp:#bc862a; --accent:#3e88cc; --good:#3fa06a; --grid:#222d36;
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#fbfcfd; --ink:#16202b; --muted:#5a6b7a; --faint:#8496a4;
+    --surface:#f1f4f7; --surface2:#e9eef2; --border:#dbe3ea; --hair:#e7edf1;
+    --s-base:#1668b0; --s-mtp:#b5651d; --accent:#1668b0; --good:#1f7a4d; --grid:#e3e9ee;
+  }
+  :root[data-theme="dark"]{
+    --bg:#0f1519; --ink:#e4eaf0; --muted:#93a2b0; --faint:#66757f;
+    --surface:#161f26; --surface2:#1b262e; --border:#26313b; --hair:#212c34;
+    --s-base:#3e88cc; --s-mtp:#bc862a; --accent:#3e88cc; --good:#3fa06a; --grid:#222d36;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;margin:0;
+    -webkit-font-smoothing:antialiased;font-size:16px}
+  .wrap{max-width:1000px;margin:0 auto;padding:clamp(24px,5vw,64px) clamp(18px,4vw,40px)}
+  .prose{max-width:66ch}
+  h1,h2,h3{line-height:1.15;text-wrap:balance;font-weight:650;letter-spacing:-0.01em}
+  h1{font-size:clamp(1.9rem,4.5vw,3rem);margin:0 0 .4em}
+  h2{font-size:clamp(1.3rem,2.6vw,1.7rem);margin:2.6em 0 .7em;padding-top:.6em}
+  h3{font-size:1.05rem;margin:1.8em 0 .5em}
+  p{margin:0 0 1em}
+  a{color:var(--accent)}
+  .eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--accent);margin:0 0 1.1em;font-weight:600}
+  .lede{font-size:clamp(1.05rem,2vw,1.25rem);color:var(--muted);max-width:60ch}
+  .rule{height:1px;background:var(--border);border:0;margin:2.4em 0}
+  .mono{font-family:var(--mono)}
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  /* stat tiles */
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin:2em 0}
+  .tile{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:18px 18px 16px}
+  .tile .k{font-family:var(--mono);font-size:clamp(1.5rem,3vw,2rem);font-weight:600;letter-spacing:-.02em;
+    line-height:1.05;font-variant-numeric:tabular-nums}
+  .tile .l{font-size:.82rem;color:var(--muted);margin-top:.5em;line-height:1.4}
+  .tile .u{font-size:.9rem;color:var(--faint);font-family:var(--mono)}
+  .tile.hero .k{color:var(--s-mtp)}
+  /* figure / chart */
+  figure{margin:1.6em 0;background:var(--surface);border:1px solid var(--border);border-radius:12px;
+    padding:20px 18px 14px}
+  figcaption{font-size:.85rem;color:var(--muted);margin-top:.8em;line-height:1.5}
+  .chart-h{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin:0 4px .4em}
+  .chart-h .t{font-weight:600;font-size:.98rem}
+  .legend{display:flex;gap:16px;font-size:.8rem;font-family:var(--mono);flex-wrap:wrap}
+  .legend .it{display:flex;align-items:center;gap:6px;color:var(--muted)}
+  .swatch{width:12px;height:12px;border-radius:3px;display:inline-block}
+  .svgwrap{width:100%;overflow-x:auto}
+  svg{display:block;max-width:100%;height:auto}
+  .ax{fill:var(--faint);font-family:var(--mono);font-size:11px}
+  .axl{fill:var(--muted);font-family:var(--mono);font-size:11px;font-weight:600}
+  .gl{stroke:var(--grid);stroke-width:1}
+  .dlabel{font-family:var(--mono);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+  /* tables */
+  .tblwrap{overflow-x:auto;margin:1.4em 0;border:1px solid var(--border);border-radius:10px}
+  table{border-collapse:collapse;width:100%;font-size:.9rem}
+  th,td{padding:9px 13px;text-align:right;white-space:nowrap}
+  th:first-child,td:first-child{text-align:left}
+  thead th{font-family:var(--mono);font-size:.75rem;text-transform:uppercase;letter-spacing:.05em;
+    color:var(--muted);font-weight:600;border-bottom:1px solid var(--border);background:var(--surface)}
+  tbody td{font-family:var(--mono);font-variant-numeric:tabular-nums;border-bottom:1px solid var(--hair)}
+  tbody tr:last-child td{border-bottom:0}
+  tbody td:first-child{font-family:var(--sans);color:var(--muted)}
+  .cell-base{color:var(--s-base)} .cell-mtp{color:var(--s-mtp);font-weight:600}
+  /* callout */
+  .note{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);
+    border-radius:8px;padding:14px 18px;margin:1.4em 0;font-size:.94rem}
+  .note.warn{border-left-color:var(--s-mtp)}
+  .note .h{font-weight:650;margin-bottom:.3em}
+  .trace{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;
+    font-family:var(--mono);font-size:.78rem;line-height:1.5;overflow-x:auto;color:var(--muted);white-space:pre}
+  .take{display:grid;gap:12px;margin:1.4em 0;padding:0;list-style:none}
+  .take li{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:14px 16px;
+    display:grid;grid-template-columns:auto 1fr;gap:14px;align-items:start}
+  .take .n{font-family:var(--mono);color:var(--accent);font-weight:700;font-size:1.1rem}
+  .take b{font-weight:650}
+  footer{margin-top:3em;padding-top:1.4em;border-top:1px solid var(--border);color:var(--faint);
+    font-size:.82rem;line-height:1.6}
+  .kbd{font-family:var(--mono);background:var(--surface2);border:1px solid var(--border);border-radius:4px;
+    padding:1px 6px;font-size:.85em}
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">Inference benchmark · single-stream coding</p>
+  <h1>A 27B coder at 262k context on four consumer cards</h1>
+  <p class="lede">Qwen3.6-27B, Q8_0 weights, <b>unquantized f16 KV</b>, tensor-parallel across
+    4× RTX&nbsp;5060&nbsp;Ti (64&nbsp;GB, ~$2K). Measured for the case that matters to a coding
+    harness: <b>one stream, batch&nbsp;=&nbsp;1</b>, prefill and decode as context grows to the
+    model's native maximum.</p>
+
+  <div class="tiles">
+    <div class="tile hero">
+      <div class="k">2.0×</div>
+      <div class="l">Median decode speedup from <b>MTP</b> speculative decoding on coding tokens
+        (1.7–2.3× across context)</div>
+    </div>
+    <div class="tile">
+      <div class="k">262,144<span class="u"> tok</span></div>
+      <div class="l">Full native context <b>fits in f16 KV</b> — 11.6&nbsp;GB of 16&nbsp;GB per card,
+        no KV quantization</div>
+    </div>
+    <div class="tile">
+      <div class="k">39→66<span class="u"> tok/s</span></div>
+      <div class="l">Decode with MTP, 1k→128k context. Baseline: 39→32. <span class="mono">bs=1</span></div>
+    </div>
+  </div>
+
+  <p class="prose">The interesting result isn't a single number — it's the <b>shape</b> of two curves
+    and what the interconnect is doing underneath them. Three findings drive everything below:
+    decode stays remarkably flat as context grows (hybrid linear attention), prefill is the real
+    long-context cost and it's <b>latency-bound on collective sync, not bandwidth</b>, and MTP roughly
+    doubles decode for a ~6% prefill tax — a trade a coding workload should always take.</p>
+
+  <hr class="rule">
+
+  <h2>Setup</h2>
+  <div class="prose">
+    <p><b>Hardware.</b> 4× RTX&nbsp;5060&nbsp;Ti (16&nbsp;GB each, Blackwell sm_120), PCIe Gen4 ×8,
+      <b>no NVLink and no P2P</b> (chipset-disabled) — cross-GPU traffic host-staged. Vast.ai container,
+      driver 580.95, CUDA 13.0.</p>
+    <p><b>Model &amp; engine.</b> Qwen3.6-27B (hybrid linear/full attention + MTP head), Unsloth
+      <span class="mono">Q8_0</span> GGUF, served by current <span class="mono">llama.cpp</span> in
+      4-way <span class="mono">--split-mode tensor</span>, flash attention on, <b>f16 KV (no quant)</b>.
+      MTP via <span class="mono">--spec-type draft-mtp</span> (heads embedded in the same weights).</p>
+    <p><b>Method.</b> Identical fixed-length coding prompts (real source corpus + an implement-this-function
+      task), streamed over the OpenAI API. <b>PP</b> = prompt tokens ÷ time-to-first-token (cold prefill,
+      prompt cache off); <b>TG</b> = decode tok/s over 256 generated tokens at <span class="mono">bs=1</span>.</p>
+  </div>
+
+  <h2>Decode holds; prefill is the tax</h2>
+  <figure>
+    <div class="chart-h">
+      <span class="t">Decode throughput vs. context</span>
+      <span class="legend">
+        <span class="it"><span class="swatch" style="background:var(--s-mtp)"></span>MTP on</span>
+        <span class="it"><span class="swatch" style="background:var(--s-base)"></span>baseline</span>
+      </span>
+    </div>
+    <div class="svgwrap"><svg id="chartTG" viewBox="0 0 920 380" role="img"
+      aria-label="Decode throughput vs context, MTP vs baseline"></svg></div>
+    <figcaption>Single-stream decode (tok/s). MTP tracks ~2× above baseline throughout. Baseline decays
+      gently to 128k then more steeply toward the 262k ceiling as the full-attention layers' KV finally
+      dominates — a dense 27B would sag far earlier.</figcaption>
+  </figure>
+
+  <figure>
+    <div class="chart-h">
+      <span class="t">Prefill throughput vs. context</span>
+      <span class="legend">
+        <span class="it"><span class="swatch" style="background:var(--s-base)"></span>baseline</span>
+        <span class="it"><span class="swatch" style="background:var(--s-mtp)"></span>MTP on</span>
+      </span>
+    </div>
+    <div class="svgwrap"><svg id="chartPP" viewBox="0 0 920 380" role="img"
+      aria-label="Prefill throughput vs context"></svg></div>
+    <figcaption>Prefill sits near a flat ~800 tok/s ceiling regardless of context — so time-to-first-token
+      grows linearly (≈86&nbsp;s at 64k, minutes at the top). MTP costs ~6% here: pure draft-head overhead
+      with nothing to speculate on during ingest.</figcaption>
+  </figure>
+
+  <h2>The full matrix</h2>
+  <div class="tblwrap"><table id="tblTG"></table></div>
+  <p class="prose" style="font-size:.9rem;color:var(--muted)">Decode (tok/s), bs=1. MTP speedup row is
+    mtp ÷ baseline.</p>
+  <div class="tblwrap"><table id="tblPP"></table></div>
+  <p class="prose" style="font-size:.9rem;color:var(--muted)">Prefill (tok/s), cold, bs=1.</p>
+
+  <h2>What the interconnect is actually doing</h2>
+  <div class="prose">
+    <p>The flat ~800 tok/s prefill ceiling is modest for four GPUs, so the obvious suspect is the
+      no-P2P PCIe link. Live <span class="mono">nvidia-smi dmon</span> during a 262k run says otherwise —
+      the bus is only <b>~15–20% utilized</b>, but SM occupancy keeps collapsing mid-collective:</p>
+    <div class="trace">GPU  SM%   rxpci  txpci   (MB/s, PCIe Gen4 x8 ≈ 16 GB/s)
+ 1    23    1829   1657    ← stalled while the bus is busy
+ 1     4    1551   1691    ← 4% — idle, waiting on sync
+ 2    90     977   2762
+ 3    95    1228    615</div>
+    <p>So it's not bandwidth — it's <b>latency</b>. At bs=1 every layer does a tiny all-reduce that sits
+      on the critical path; the fixed per-collective cost (kernel launch + sync + a small host-staged
+      hop) dominates, and compute idles waiting for it.</p>
+    <div class="note warn">
+      <div class="h">Cross-box confirmation: P2P doesn't help</div>
+      On a sister 2-card rig, enabling P2P via the Geohot/reBAR patch produced <b>identical</b> harness
+      numbers. That's the clean proof: P2P is a <i>bandwidth</i> optimization, and this workload isn't
+      bandwidth-bound. For single-stream inference, chase fewer/cheaper sync points — not P2P.
+    </div>
+    <h3>The cards are never the wall</h3>
+    <p>Independent confirmation from the power rail: during a live 262k prefill the GPUs draw
+      <b>~100–113 W against a 160 W limit</b> at <b>60 °C</b> — even while
+      <span class="mono">utilization.gpu</span> reads 100%. Power is the honest proxy for real compute
+      intensity, and at ~65% of limit it says the SMs are stalling <i>inside</i> their kernels, not doing
+      full-throughput math. No power throttle, no thermal throttle, ~60&nbsp;W of headroom per card unused —
+      at <span class="mono">bs=1</span> the hardware is structurally under-fed. That's four independent
+      signals — SM dips, idle PCIe, the P2P-null A/B, and low power — pointing at one cause.</p>
+  </div>
+
+  <h2>Takeaways</h2>
+  <ul class="take">
+    <li><span class="n">1</span><span><b>262k context is real on 64 GB, unquantized.</b> Q8_0 weights +
+      f16 KV land at ~11.6 GB/card at full context — hybrid linear attention keeps KV tiny. No KV
+      quantization needed.</span></li>
+    <li><span class="n">2</span><span><b>Turn MTP on for coding.</b> ~2× decode (1.7–2.3×) for a ~6%
+      prefill tax. You generate far more than a couple tokens per turn, so it's a clear win.</span></li>
+    <li><span class="n">3</span><span><b>Prefill, not decode, is the long-context cost.</b> Decode barely
+      moves; TTFT grows linearly with context. Optimize prompt reuse / caching in the harness, not decode.</span></li>
+    <li><span class="n">4</span><span><b>The limiter is collective latency, not the interconnect.</b>
+      PCIe sits idle; GPUs stall on per-layer sync. P2P/reBAR won't move it — confirmed by a 2-card A/B.</span></li>
+  </ul>
+
+  <footer>
+    <p><b>Caveats.</b> Single box, single stream (bs=1); throughput/serving is a different regime. Prefill
+      measured cold (cache off) to isolate the scaling curve — a real harness with prompt caching sees far
+      lower effective TTFT. The 262,144 point is the model's <i>trained maximum</i>, so it leaves almost no
+      room to decode; the near-max throughput point is measured at ~255k so 256 decode tokens fit inside the
+      ceiling. Numbers are medians of repeated runs.</p>
+  </footer>
+</div>
+
+<script>
+// ---- DATA (tok/s). top point (index 6, ~255k) filled once bench_top lands ----
+const CTX = [1024, 4096, 16384, 32768, 65536, 131072, 261120];
+const CTXLAB = ["1k","4k","16k","32k","64k","128k","255k"];
+const TG = { base:[39.4,38.9,37.8,36.7,35.3,31.9,26.7], mtp:[69.0,67.2,75.2,65.0,81.0,66.7,52.2] };
+const PP = { base:[795,810,831,807,760,696,608],        mtp:[658,780,780,762,712,649,562] };
+
+const css = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+const lg = x => Math.log10(x);
+
+function lineChart(svgId, series, opts){
+  const svg = document.getElementById(svgId);
+  const W=920,H=380, m={t:20,r:74,b:46,l:52};
+  const xs = CTX.map(lg), xmin=Math.min(...xs), xmax=Math.max(...xs);
+  const all = series.flatMap(s=>s.data).filter(v=>v!=null);
+  let ymax = opts.ymax || Math.max(...all)*1.08, ymin=0;
+  const px = v => m.l + (lg(v)-xmin)/(xmax-xmin)*(W-m.l-m.r);
+  const py = v => H-m.b - (v-ymin)/(ymax-ymin)*(H-m.t-m.b);
+  let s = '';
+  // y gridlines + labels
+  const yticks = opts.yticks;
+  yticks.forEach(t=>{ const y=py(t);
+    s += `<line class="gl" x1="${m.l}" y1="${y}" x2="${W-m.r}" y2="${y}"/>`;
+    s += `<text class="ax" x="${m.l-8}" y="${y+4}" text-anchor="end">${t}</text>`;
+  });
+  // x labels
+  CTX.forEach((c,i)=>{ const x=px(c);
+    s += `<text class="ax" x="${x}" y="${H-m.b+18}" text-anchor="middle">${CTXLAB[i]}</text>`;
+  });
+  s += `<text class="axl" x="${(m.l+W-m.r)/2}" y="${H-6}" text-anchor="middle">context (tokens, log)</text>`;
+  s += `<text class="axl" transform="translate(14,${(m.t+H-m.b)/2}) rotate(-90)" text-anchor="middle">${opts.ylab}</text>`;
+  // series
+  series.forEach(se=>{
+    const pts = CTX.map((c,i)=>[c,se.data[i]]).filter(p=>p[1]!=null);
+    const d = pts.map((p,i)=>`${i?'L':'M'}${px(p[0]).toFixed(1)},${py(p[1]).toFixed(1)}`).join(' ');
+    s += `<path d="${d}" fill="none" stroke="${css(se.color)}" stroke-width="2.5"
+           stroke-linejoin="round" stroke-linecap="round"/>`;
+    pts.forEach(p=>{ s += `<circle cx="${px(p[0]).toFixed(1)}" cy="${py(p[1]).toFixed(1)}" r="4.5"
+           fill="${css(se.color)}" stroke="var(--surface)" stroke-width="2"><title>${se.name} @ ${p[0]} tok: ${p[1]}</title></circle>`; });
+    const last = pts[pts.length-1];
+    s += `<text class="dlabel" x="${px(last[0])+10}" y="${py(last[1])+4}" fill="${css(se.color)}">${last[1]}</text>`;
+  });
+  svg.innerHTML = s;
+}
+
+function drawAll(){
+  lineChart('chartTG',[
+    {name:'MTP on',   data:TG.mtp,  color:'--s-mtp'},
+    {name:'baseline', data:TG.base, color:'--s-base'},
+  ],{ylab:'decode tok/s', ymax:90, yticks:[0,20,40,60,80]});
+  lineChart('chartPP',[
+    {name:'baseline', data:PP.base, color:'--s-base'},
+    {name:'MTP on',   data:PP.mtp,  color:'--s-mtp'},
+  ],{ylab:'prefill tok/s', ymax:900, yticks:[0,200,400,600,800]});
+}
+
+function fmt(v){return v==null?'·':v}
+function buildTables(){
+  const head = '<thead><tr><th>config</th>'+CTXLAB.map(l=>`<th>${l}</th>`).join('')+'</tr></thead>';
+  // TG
+  let b = '<tbody>';
+  b += `<tr><td>baseline</td>`+TG.base.map(v=>`<td class="cell-base">${fmt(v)}</td>`).join('')+'</tr>';
+  b += `<tr><td>MTP on</td>`+TG.mtp.map(v=>`<td class="cell-mtp">${fmt(v)}</td>`).join('')+'</tr>';
+  b += `<tr><td>speedup</td>`+CTX.map((c,i)=>{const a=TG.base[i],m=TG.mtp[i];
+        return `<td>${(a&&m)?(m/a).toFixed(2)+'×':'·'}</td>`;}).join('')+'</tr>';
+  b += '</tbody>';
+  document.getElementById('tblTG').innerHTML = head+b;
+  // PP
+  let p = '<tbody>';
+  p += `<tr><td>baseline</td>`+PP.base.map(v=>`<td class="cell-base">${fmt(v)}</td>`).join('')+'</tr>';
+  p += `<tr><td>MTP on</td>`+PP.mtp.map(v=>`<td class="cell-mtp">${fmt(v)}</td>`).join('')+'</tr>';
+  p += '</tbody>';
+  document.getElementById('tblPP').innerHTML = head+p;
+}
+
+drawAll(); buildTables();
+new MutationObserver(drawAll).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+matchMedia('(prefers-color-scheme:dark)').addEventListener?.('change',drawAll);
+</script>
