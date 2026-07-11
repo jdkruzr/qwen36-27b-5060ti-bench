@@ -344,6 +344,20 @@
   </div>
 
 
+  <div class="note">
+    <div class="h">Caveat — no NVLink (and it's a 3090-only question)</div>
+    Every 3090 number here is <b>PCIe-only</b>; none used the ~$400 2-card NVLink bridge (no Vast box has
+    one). Would it help single-stream? Our data says likely little: the Ceres <b>P2P-null A/B</b> showed
+    that removing the host round-trip changed nothing, so the limiter is fixed per-collective overhead, not
+    transport — and NVLink is a faster transport. The asterisk: NVLink's dedicated low-latency link isn't
+    the same as reBAR P2P, and it would <b>unlock the <span class="mono">row</span> split mode</b> (which
+    needs peer buffers and died without them). Two bridges on 4 cards = two <i>independent</i> pairs
+    (0↔1, 2↔3), not a mesh — cross-pair stays PCIe, and internal AR is 2-device-only regardless. And it's
+    <b>moot for the 5060 Ti</b>: consumer Blackwell has <b>no NVLink at all</b> (the 3090/3090 Ti were the
+    last consumer cards with it), so the quad's latency-bound behavior is a hard ceiling — no interconnect
+    upgrade path exists.
+  </div>
+
   <h2>Takeaways</h2>
   <ul class="take">
     <li><span class="n">1</span><span><b>262k context is real on 64 GB, unquantized.</b> Q8_0 weights +

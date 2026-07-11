@@ -81,6 +81,12 @@ Same harness on a pair of RTX 3090s (no NVLink; on exactly 2 GPUs llama.cpp uses
   a non-issue (measured ~1–3 GB/s; even PCIe 4.0 ×4 has ~3× headroom) — the real variable is collective
   *latency* / topology (favor CPU-direct lanes).
 
+- **No NVLink (3090-only caveat):** all 3090 numbers are PCIe-only. NVLink would help single-stream
+  little (the Ceres P2P-null A/B showed transport isn't the limiter) but *would* unlock the `row` split
+  mode (needs peer buffers; died without them). Two bridges on 4 cards = two *independent* pairs, not a
+  mesh. Moot for the 5060 Ti: consumer Blackwell has **no NVLink at all**, so its latency-bound ceiling
+  has no interconnect upgrade path.
+
 ## Hardware & software
 
 - **GPUs:** 4× NVIDIA RTX 5060 Ti (16 GB, Blackwell **sm_120**), PCIe Gen4 ×8, **no NVLink, no
